@@ -1,0 +1,32 @@
+name: Cleanup Expired Files
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # Jalankan setiap hari pukul 00:00 UTC
+
+jobs:
+  delete_expired_files:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Delete expired files
+        run: |
+          CURRENT_DATE=$(date -u +"%Y-%m-%d")
+
+          for metadata in uploads/*.json; do
+            FILE_PATH="${metadata%.json}"
+            EXPIRATION_DATE=$(jq -r '.expires_at' "$metadata")
+
+            if [[ "$EXPIRATION_DATE" != "null" && "$EXPIRATION_DATE" < "$CURRENT_DATE" ]]; then
+              echo "Deleting expired file: $FILE_PATH"
+              git rm "$FILE_PATH"
+              git rm "$metadata"
+            fi
+          done
+
+          git config --global user.email "github-actions@github.com"
+          git config --global user.name "GitHub Actions"
+          git commit -m "Cleanup expired files"
+          git push
