@@ -1,27 +1,15 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Halaman Tidak Ditemukan</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            text-align: center;
-            padding: 50px;
-        }
-        h1 {
-            font-size: 50px;
-            color: #ff4444;
-        }
-        p {
-            font-size: 20px;
-        }
-    </style>
+    <title>404 Not Found</title>
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            document.body.innerHTML = `<pre>${JSON.stringify({ error: "File Not Found" }, null, 2)}</pre>`;
+        });
+    </script>
 </head>
 <body>
-    <h1>404</h1>
-    <p>Oops! Halaman yang kamu cari tidak ditemukan.</p>
-    <a href="/">Kembali ke Beranda</a>
 </body>
 </html>
