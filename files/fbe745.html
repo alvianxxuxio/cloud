@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bing AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #343541;
+            --bg-secondary: #444654;
+            --bg-ai-message: #444654;
+            --text-primary: #FFFFFF;
+            --text-secondary: #D1D5DB;
+        }
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+        }
+        #chat-container {
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255,255,255,0.2) transparent;
+            height: calc(100vh - 220px);
+        }
+        #chat-container::-webkit-scrollbar {
+            width: 8px;
+        }
+        #chat-container::-webkit-scrollbar-thumb {
+            background-color: rgba(255,255,255,0.2);
+            border-radius: 4px;
+        }
+        .message-user {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+        }
+        .message-ai {
+            background-color: var(--bg-ai-message);
+            color: var(--text-primary);
+        }
+        .search-references {
+            background-color: rgba(68, 70, 84, 0.5);
+            color: var(--text-secondary);
+            border-radius: 0.5rem;
+            padding: 0.5rem;
+            margin-top: 0.5rem;
+        }
+        .search-references a {
+            color: #3b82f6;
+            text-decoration: underline;
+        }
+        .ai-disclaimer {
+            background-color: rgba(68, 70, 84, 0.3);
+            color: var(--text-secondary);
+            padding: 0.75rem;
+            text-align: center;
+            font-size: 0.75rem;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+        pre {
+            background-color: #2c2c2c;
+            color: #e0e0e0;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+            max-width: 100%;
+        }
+        @keyframes cursor-blink {
+            0% { opacity: 0; }
+            50% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+        .typing-cursor::after {
+            content: '|';
+            animation: cursor-blink 1s infinite;
+        }
+        .loading-dots {
+            display: inline-flex;
+            align-items: center;
+        }
+        .loading-dots span {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            margin: 0 2px;
+            border-radius: 50%;
+            background-color: #3b82f6;
+            animation: loading-dots 1.4s infinite ease-in-out both;
+        }
+        .loading-dots span:nth-child(1) {
+            animation-delay: -0.32s;
+        }
+        .loading-dots span:nth-child(2) {
+            animation-delay: -0.16s;
+        }
+        @keyframes loading-dots {
+            0%, 80%, 100% { 
+                opacity: 0.5; 
+                transform: scale(0.7);
+            }
+            40% { 
+                opacity: 1; 
+                transform: scale(1);
+            }
+        }
+    </style>
+</head>
+<body class="bg-[#343541] text-white flex flex-col h-screen">
+    <div class="flex flex-col flex-grow w-full max-w-4xl mx-auto">
+        <header class="p-4 border-b border-white/10 flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <h1 class="text-xl font-bold">Bing AI</h1>
+            </div>
+        </header>
+
+        <div id="chat-container" class="flex-grow overflow-y-auto p-4 space-y-4">
+            <!-- Chat messages akan ditambahkan secara dinamis di sini -->
+        </div>
+
+        <div class="p-4 border-t border-white/10">
+            <div class="relative max-w-3xl mx-auto">
+                <input 
+                    type="text" 
+                    id="message-input" 
+                    placeholder="Ketik pertanyaan Anda..." 
+                    class="w-full flex-grow p-3 rounded-lg border border-white/10 text-white bg-[#444654] focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                <button 
+                    id="send-btn" 
+                    class="absolute right-2 top-1/2 -translate-y-1/2 bg-[#19c37d] p-2 rounded-lg hover:bg-opacity-90 transition flex items-center justify-center"
+                >
+                    <span class="material-icons text-white">send</span>
+                </button>
+            </div>
+        </div>
+
+        <footer class="ai-disclaimer">
+            AI can make mistakes. Please check important information.
+        </footer>
+    </div>
+
+    <script>
+    $(document).ready(function() {
+        const API_BASE_URL = 'https://loco.web.id/wp-content/uploads/api/v1/bingai.php';
+        const $chatContainer = $('#chat-container');
+        const $messageInput = $('#message-input');
+        const $sendBtn = $('#send-btn');
+
+        function cleanText(text) {
+            return text.replace(/\[\^?\d+\^?\]/g, '').trim();
+        }
+
+        function formatText(text) {
+      text = text.replace(/```(\w*)\n([\s\S]*?)```/g, function(match, lang, code) {
+        return `<pre><code class="language-${lang || 'plaintext'}">${escapeHtml(code.trim())}</code></pre>`;
+    });
+
+    text = text.replace(/\*(.*?)\*/g, '<strong>$1</strong>');
+    text = text.replace(/(?:^|\n)(\d+)\.\s+(.*?)(?=\n|$)/g, '<li>$2</li>');
+    if (/<li>/.test(text)) {
+        text = text.replace(/(<li>.*?<\/li>)/g, '<ol class="list-decimal pl-4">$1</ol>');
+    }
+    text = text.replace(/(?:^|\n)-\s+(.*?)(?=\n|$)/g, '<li>$1</li>');
+    if (/<li>/.test(text)) {
+        text = text.replace(/(<li>.*?<\/li>)/g, '<ul class="list-disc pl-4">$1</ul>');
+    }
+
+    return text;
+}
+
+        function escapeHtml(unsafe) {
+            return unsafe
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        function createClickableLinks(text) {
+            const urlRegex = /(https?:\/\/[^\s]+)/g;
+            return text.replace(urlRegex, function(url) {
+                return `<a href="${url}" target="_blank" class="text-blue-500 underline">${url}</a>`;
+            });
+        }
+
+        function showLoadingIndicator() {
+            const loadingHtml = `
+                <div class="flex justify-start" id="loading-indicator">
+                    <div class="max-w-[80%] px-4 py-2 rounded-2xl bg-[#444654] text-white shadow-sm break-words">
+                        <div class="loading-dots">
+                            Processing
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                        </div>
+                    </div>
+                </div>
+            `;
+            $chatContainer.append(loadingHtml);
+            $chatContainer.scrollTop($chatContainer[0].scrollHeight);
+        }
+
+        function removeLoadingIndicator() {
+            $('#loading-indicator').remove();
+        }
+
+        function addMessage(text, type, searchResults = null, webSearchResults = null) {
+            const messageClass = type === 'user' 
+                ? 'message-user p-4 rounded-xl border border-white/10' 
+                : 'message-ai p-4 rounded-xl typing-cursor';
+            
+            const cleanedText = cleanText(text);
+            const formattedText = formatText(createClickableLinks(cleanedText));
+
+            const messageHtml = `
+                <div class="${type === 'user' ? 'flex justify-end' : 'flex justify-start'}">
+                    <div class="${messageClass} max-w-[80%]">
+                        ${formattedText}
+                    </div>
+                </div>
+            `;
+            $chatContainer.append(messageHtml);
+
+            if (searchResults && searchResults.length > 0) {
+                const searchLinksHtml = `
+                    <div class="search-references text-sm">
+                        <strong>Reference Search:</strong>
+                        <div class="space-y-1">
+                            ${searchResults.map(link => 
+                                `<a href="${link}" target="_blank" class="block truncate">${link}</a>`
+                            ).join('')}
+                        </div>
+                    </div>
+                `;
+                $chatContainer.append(searchLinksHtml);
+            }
+
+            if (webSearchResults && webSearchResults.length > 0) {
+                const webSearchLinksHtml = `
+                    <div class="search-references text-sm">
+                        <strong>Web Search:</strong>
+                        <div class="space-y-2">
+                            ${webSearchResults.map(item => `
+                                <div class="bg-[#444654] p-2 rounded">
+                                    <a href="${item.url}" target="_blank" class="text-blue-500 font-semibold underline block">${item.title}</a>
+                                    <p class="text-xs text-gray-300 mt-1">${item.snippets.join(' ')}</p>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+                $chatContainer.append(webSearchLinksHtml);
+            }
+
+            $chatContainer.scrollTop($chatContainer[0].scrollHeight);
+        }
+
+        function sendMessage() {
+            const message = $messageInput.val().trim();
+            if (!message) return;
+
+            $sendBtn.prop('disabled', true);
+            $messageInput.prop('disabled', true);
+
+            addMessage(message, 'user');
+            $messageInput.val('');
+
+            showLoadingIndicator();
+
+            $.ajax({
+                url: `${API_BASE_URL}?q=${encodeURIComponent(message)}`,
+                method: 'GET',
+                dataType: 'json',
+                success: function(response) {
+                    removeLoadingIndicator();
+                    $sendBtn.prop('disabled', false);
+                    $messageInput.prop('disabled', false);
+
+                    if (response && response.result) {
+                        const result = response.result;
+
+                        const searchLinks = Array.isArray(result.search_results) 
+                            ? result.search_results.map(item => item.url) 
+                            : [];
+
+                        const webSearchResults = Array.isArray(result.web_search_results) 
+                            ? result.web_search_results 
+                            : [];
+
+                        if (result.ai_response) {
+                            addMessage(result.ai_response, 'ai', searchLinks, webSearchResults);
+                        }
+                    }
+                },
+                error: function() {
+                    removeLoadingIndicator();
+                    $sendBtn.prop('disabled', false);
+                    $messageInput.prop('disabled', false);
+                    addMessage('Error in fetching response. Please try again later.', 'ai');
+                }
+            });
+        }
+
+        $sendBtn.on('click', sendMessage);
+        $messageInput.on('keypress', function(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        });
+    });
+    </script>
+</body>
+</html>
